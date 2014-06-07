@@ -8,14 +8,13 @@
 use strict;
 use warnings;
 
-# Set this if you want to run private requests. (your found here: https://bitpay.com/api-keys)
-use constant API_KEY => '';
-use constant DEBUG   => 0;
-
-use constant TEST_LEDGER => 0;
-
-#use Test::More tests => (2 + (API_KEY ? 3 : 0));
 use Test::More;
+
+# Set this if you want to run private requests. (your found here: https://bitpay.com/api-keys)
+use constant API_KEY     => '';
+
+use constant DEBUG       => 0;
+use constant TEST_LEDGER => 0;
 
 use constant INVOICE_COLUMNS => qw(
     expirationTime 

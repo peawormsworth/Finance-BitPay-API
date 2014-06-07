@@ -96,6 +96,8 @@ sub send {
 
             warn Data::Dumper->Dump([$self->user_agent, $request],[qw(UserAgent Request)]) if DEBUG;
 
+# if the request has authentication errors... like bad SSL cert, would this die?
+# should we encase this in an eval???
             $self->http_response($self->user_agent->request($request));
             $self->process_response;
         }
@@ -108,6 +110,8 @@ sub process_response {
 
     warn sprintf "Response CODE: %s\n", $self->http_response->code    if DEBUG;
     warn sprintf "Content: %s\n",       $self->http_response->content if DEBUG;
+
+# We should really check for network errors here...
 
 # This logic does not look so nice, its probably simpler...
     my $content;
@@ -174,8 +178,32 @@ Finance::BitPay::API - Perl extension for handling the BitPay API and IPN calls.
 
   use Finance::BitPay::API;
 
-  my $bitpay = Finance::BitPay::API->new(key => 'YOUR API KEY GOES HERE');
+  # all the standard BitPay API calls...
+
+  my $bitpay  = Finance::BitPay::API->new(key => 'abc123');
   my $invoice = $bitpay->invoice_create(currency => 'EUR', price => '9.99');
+  my $invoice = $bitpay->invoice_get(id => $id);
+  my $rates   = $bitpay->rates;
+  my $ledger  = $bitpay->ledger(c => 'USD', startDate => '2014-01-01, endDate => '2014-01-10');
+
+  # The bitpay object contains all the request data from the last request...
+
+  my $user_agent = $bitpay->user_agent;
+
+  if ($bitpay->success) {
+      print 'SUCESS';
+  }
+  else {
+      print 'FAIL';
+      my $error = $bitpay->error;
+  }
+
+
+  # A more useful example...
+
+  my $bitpay  = Finance::BitPay::API->new(key => 'YOUR API KEY GOES HERE');
+  my $invoice = $bitpay->invoice_create(currency => 'EUR', price => '9.99');
+
   if ($invoice) {
       printf "The BitPay invoice ID is %s. You can see it here: %s\n", @{$invoice}{qw(id url)};
   }
@@ -185,12 +213,12 @@ Finance::BitPay::API - Perl extension for handling the BitPay API and IPN calls.
 
 =head1 DESCRIPTION
 
-This API provides a quick way to access the BitPay API from perl without worrying about
-the connection and errors in between.
+This API module provides a quick way to access the BitPay API from perl without worrying about
+the connection, authenticatino and an errors in between.
 
 You call these on the API object created like this:
 
-  my $api = Finance::BitPay::API->new(key => 'YOUR_KEY';
+  my $bitpay = Finance::BitPay::API->new(key => 'YOUR_KEY';
 
 ...Where 'YOUR_KEY' is the text key provided to you by BitPay through their merchant interface
 
@@ -200,7 +228,24 @@ The primary methods are:
 
 The return value is a hash representing the BitPay response.
 
-=head2 METHODS
+  my $response_as_a_hash = $bitpay->invoice_create(currency => $cur, price => $price);
+
+The return value will be undefined when an error occurs...
+
+  if ($bitpay->is_success) {
+      # the last primary method call worked!
+  }
+  else {
+      print "There was an error: " . $bitpay->error;
+      # more detail can be found in the bitpay object using...
+      my $ua           = $bitpay->user_agent;
+      my $raw_request  = $bitpay->http_request;
+      my $raw_response = $bitpay->http_response;
+      # further inspection could go here (like dumping the content of the useragent)
+  }
+  
+
+=head1 METHODS
 
 =head2 new()
 
@@ -211,43 +256,58 @@ Create a new Finance::BitPay::API object.
 Request a new invoice from BitPay. 
 The input is a hash with keys: 
 
-  price and currency.
+    price and currency.
 
 Additionally optional input settings:
 
 IPN fields:
 
-  posData, notificationURL, transactionSpeed, fullNotifications, notificationEmail
+    posData, notificationURL, transactionSpeed, fullNotifications, notificationEmail
 
 Order handling:
 
-  redirectURL
+    redirectURL
 
 Buyer information:
 
-  orderID, itemDesc, itemCode, physical, buyerName, buyerAddress1, buyerAddress2, buyerCity, buyerState, buyerZip, buyerCountry, buyerEmail, buyerPhone
+    orderID, itemDesc, itemCode, physical, buyerName, buyerAddress1, buyerAddress2, buyerCity, buyerState, buyerZip, buyerCountry, buyerEmail, buyerPhone
 
 The invoice is generated like this:
 
-  my $invoice = $bitpay->invoice_create(currency => 'CAD', price => '5.99', buyerName => 'Prime Minister');
+    my $invoice = $bitpay->invoice_create(currency => 'CAD', price => '5.99', buyerName => 'Prime Minister');
 
 =head2 invoice_get()
 
 Get the current state of an invoice, given its invoice Id.
 
-  my $invoice = $bitpay->invoice_get(id => 'YOUR_INVOICE_ID');
+    my $invoice = $bitpay->invoice_get(id => 'YOUR_INVOICE_ID');
 
 =head2 rates()
 
 Get the current rates by currency...
 
-  my $rates = $bitpay->rates;
+    my $rates = $bitpay->rates;
 
 =head2 ledger()
 
 I cannot explain what this does...
 
-  my $ledger = $bitpay->ledger(c => $currency, startDate => $start_date, endDate => $end_date);
+    my $ledger = $bitpay->ledger(c => $currency, startDate => $start_date, endDate => $end_date);
+
+=head1 NOTES
+
+This module does not do accessive error checking on the request or the response.
+It will only check for "required" parameters prior to sending a request to BitPay.
+This means that you provide a word for a 'amount' parameter, and this module will happily send that off to BitPay for you.
+In these cases we are allowing BitPay to decide what is and is not valid input.
+If the input values are invalid, we expect BitPay to provide an appropriate response and that is the message we will return to the caller (through $bitpay->error).
+
+This module does not validate the response from BitPay.
+In general it will return success when any json response is provided by Bitpay without the 'error' key.
+The SSL certificate is verified automatically by LWP, so the response you will get is very likely from BitPay itself.
+If there is an 'error' key in the json response, then that error is put into the $bitpay->error attribute.
+If there is an 'error' parsing the response from BitPay, then the decoding error from json is in the $bitpay->error attribute.
+If there is a network error (not 200), then the error code and $response->error will contain the HTTP Response status_line() (a string response of what went wrong).
 
 =head1 SEE ALSO
 
