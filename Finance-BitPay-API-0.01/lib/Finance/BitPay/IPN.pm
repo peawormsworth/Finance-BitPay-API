@@ -10,26 +10,20 @@ use base qw(Finance::BitPay::DefaultPackage);
 
 use constant DEBUG => 0;
 
-# you can use a lower version, but then you are responsible for SSL cert verification code...
 use CGI;
 use JSON;
-use MIME::Base64;
-use Time::HiRes qw(gettimeofday);
-use Digest::SHA qw(hmac_sha256_hex);
-use Math::BigFloat;
-use Data::Dumper;
 
-use constant COMPANY          => 'BitPay';
-use constant ATTRIBUTES       => qw(cgi content);
-use constant ERROR_NO_CONTENT => 'No CGI object or content was received';
-use constant ERROR_NOT_READY  => 'Not enough information to send a %s request';
-use constant ERROR_READY      => 'The request IS%s READY to send';
-use constant ERROR_BITPAY     => COMPANY . ' error: "%s"';
-use constant ERROR_UNKNOWN    => COMPANY . ' returned an unknown status';
-
-use constant ERROR_SERVER_NAME   => 'IPN does not seem to be coming from BitPay.com';
-use constant ERROR_SSL_CERT      => 'SSL cert does not belong to BitPay.com';
-
+use constant COMPANY           => 'BitPay';
+use constant ATTRIBUTES        => qw(cgi content);
+use constant ERROR_NO_CONTENT  => 'No CGI object or content was received';
+use constant ERROR_NOT_READY   => 'Not enough information to send a %s request';
+use constant ERROR_READY       => 'The request IS%s READY to send';
+use constant ERROR_BITPAY      => COMPANY . ' error: "%s"';
+use constant ERROR_UNKNOWN     => COMPANY . ' returned an unknown status';
+use constant ERROR_SERVER_NAME => 'IPN does not seem to be coming from BitPay.com (received: %s)';
+use constant BITPAY_URL_REGEX  => qr/^bitpay\.com$/i;
+use constant ERROR_NETWORK     => 'Network Request (REST/JSON) error: %s';
+use constant ERROR_CONTENT     => 'WARNING: Returning unknown content';
 
 sub is_ready {
     my $self = shift;
@@ -59,38 +53,27 @@ sub receive {
     }
 
     unless ($self->content) {
-        $self->error({
-            type    => __PACKAGE__,
-            message => ERROR_NO_CONTENT,
-        });
+        #$self->error({
+            #type    => __PACKAGE__,
+            #message => ERROR_NO_CONTENT,
+        #});
+        $self->error(ERROR_NO_CONTENT);
     }
     else {
         $self->process_content;
     }
 # done the part that is not right...
+
     return $self->is_success;
 }
 
-use constant BITPAY_URL_REGEX    => qr/^bitpay\.com$/i;
 sub process_content {
     my $self = shift;
 
     # verify the remote source...
     if ($ENV{SERVER_NAME} !~ BITPAY_URL_REGEX) {
         # this is coming from some other server...
-        $self->error(Finance::BitPay::Error->new(
-            type    => __PACKAGE__,
-            message => ERROR_SERVER_NAME,
-        ));
-    }
-    # check the SSL cert... I dont know how yet...
-# seriously??? doesnt LWP do this automagically?
-    elsif (0) {
-        # this is coming from some other server...
-        $self->error(Finance::BitPay::Error->new(
-            type    => __PACKAGE__,
-            message => ERROR_SSL_CERT,
-        ));
+        $self->error(sprintf ERROR_SERVER_NAME, $ENV{SERVER_NAME});
     }
     else {
         warn sprintf "Content: %s\n", $self->content if DEBUG;
@@ -101,7 +84,7 @@ sub process_content {
             $content = $self->json->decode($self->content);
             1;
         } or do {
-            $self->error("Network Request (REST/JSON) error: $@");
+            $self->error(sprintf ERROR_NETWORK, $@);
             warn $self->error . "\n";
             warn sprintf "Content was: %s\n", $self->content;
         };
@@ -115,21 +98,12 @@ sub process_content {
                 $self->error($content->{error});
             }
             else {
-                warn "WARNING: Returning unknown content\n";
+                warn ERROR_CONTENT . "\n";
                 $self->request($content);
             }
         }
     }
     return $self->is_success;
-}
-
-
-# this method makes the action call routines simpler...
-sub _class_action {
-    my $self = shift;
-    my $class = CLASS_ACTION_MAP->{((caller(1))[3] =~ /::(\w+)$/)[0]};
-    $self->response($class->new(@_));
-    return $self->recieve ? $self->request : undef;
 }
 
 sub json        { shift->{json} ||= JSON->new }
