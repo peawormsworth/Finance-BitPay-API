@@ -19,7 +19,6 @@ use constant ERROR_NO_CONTENT  => 'No CGI object or content was received';
 use constant ERROR_NOT_READY   => 'Not enough information to send a %s request';
 use constant ERROR_READY       => 'The request IS%s READY to send';
 use constant ERROR_BITPAY      => COMPANY . ' error: "%s"';
-use constant ERROR_UNKNOWN     => COMPANY . ' returned an unknown status';
 use constant ERROR_SERVER_NAME => 'IPN does not seem to be coming from BitPay.com (received: %s)';
 use constant BITPAY_URL_REGEX  => qr/^bitpay\.com$/i;
 use constant ERROR_NETWORK     => 'Network Request (REST/JSON) error: %s';
@@ -53,10 +52,6 @@ sub receive {
     }
 
     unless ($self->content) {
-        #$self->error({
-            #type    => __PACKAGE__,
-            #message => ERROR_NO_CONTENT,
-        #});
         $self->error(ERROR_NO_CONTENT);
     }
     else {

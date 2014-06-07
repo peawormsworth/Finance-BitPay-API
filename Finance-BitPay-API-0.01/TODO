@@ -20,3 +20,10 @@ and put each key into the attributes of the object.
  This means that if BitPay changes the API to return new response values,
  then these return objects will need to be coded to support that.
 
+IPN.pm is not tested and likely doesnt fully work.
+- find a way to test this.
+
+Setup a test webserver so it can send fake BitPay responses when requested.
+- this allows the class methods to be tested without the need for BitPay merchant credentials.
+
+
