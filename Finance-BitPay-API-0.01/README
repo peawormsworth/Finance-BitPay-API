@@ -1,7 +1,7 @@
 Finance-BitPay-API version 0.01
 ===============================
 
-This module allows easy access to the BitPay API calls.
+This module allows object oriented access to the BitPay API calls.
 It supports both public and private calls as well
 as IPN handling.
 
